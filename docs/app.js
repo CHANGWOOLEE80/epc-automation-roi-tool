@@ -1,3 +1,306 @@
-const technologies = [  {    name: "Welding Robot",    category: "Welding",    deploymentRisk: "Medium",    readiness: "Pilot required",    capex: 260000000,    annualOpex: 35000000,    laborSaving: 90000000,    scheduleBenefit: 45000000,    reworkReduction: 20000000,    otherBenefit: 10000000  },  {    name: "Rebar Cage Automation",    category: "Civil",    deploymentRisk: "Medium",    readiness: "Pilot required",    capex: 320000000,    annualOpex: 42000000,    laborSaving: 120000000,    scheduleBenefit: 60000000,    reworkReduction: 25000000,    otherBenefit: 15000000  },  {    name: "3D Concrete Printing",    category: "Civil",    deploymentRisk: "High",    readiness: "Early stage",    capex: 450000000,    annualOpex: 60000000,    laborSaving: 140000000,    scheduleBenefit: 90000000,    reworkReduction: 30000000,    otherBenefit: 20000000  },  {    name: "AGV / Mobile Transporter",    category: "Logistics",    deploymentRisk: "Low",    readiness: "Proven",    capex: 180000000,    annualOpex: 28000000,    laborSaving: 70000000,    scheduleBenefit: 30000000,    reworkReduction: 10000000,    otherBenefit: 15000000  },  {    name: "Tank Coating Robot",    category: "Painting",    deploymentRisk: "Medium",    readiness: "Pilot required",    capex: 220000000,    annualOpex: 30000000,    laborSaving: 85000000,    scheduleBenefit: 35000000,    reworkReduction: 18000000,    otherBenefit: 12000000  }];function calculateAnnualGrossBenefit(item) {  return (    item.laborSaving +    item.scheduleBenefit +    item.reworkReduction +    item.otherBenefit  );}function calculateAnnualNetBenefit(item) {  return calculateAnnualGrossBenefit(item) - item.annualOpex;}function calculatePaybackPeriod(item) {  const annualNetBenefit = calculateAnnualNetBenefit(item);  if (annualNetBenefit <= 0) {    return null;  }  return item.capex / annualNetBenefit;}function determinePriority(item) {  const payback = calculatePaybackPeriod(item);  const annualNetBenefit = calculateAnnualNetBenefit(item);  if (payback === null) {    return "Low";  }  if (    payback <= 3 &&    annualNetBenefit >= 100000000 &&    item.deploymentRisk !== "High" &&    item.readiness !== "Early stage"  ) {    return "High";  }  if (payback <= 5 && item.deploymentRisk !== "High") {    return "Medium";  }  return "Low";}function formatEok(value) {  const eok = value / 100000000;  return `${eok.toFixed(1)} 억원`;}function formatPayback(value) {  if (value === null) {    return "Not recoverable";  }  return `${value.toFixed(1)} years`;}function getPriorityClass(priority) {  if (priority === "High") {    return "priority-high";  }  if (priority === "Medium") {    return "priority-medium";  }  return "priority-low";}function getRiskClass(risk) {  if (risk === "Low") {    return "risk-low";  }  if (risk === "Medium") {    return "risk-medium";  }  return "risk-high";}function getReadinessClass(readiness) {  if (readiness === "Proven") {    return "readiness-proven";  }  if (readiness === "Pilot required") {    return "readiness-pilot";  }  return "readiness-early";}function getRecoverableTechnologies() {  return technologies    .map((item) => ({      ...item,      annualNetBenefit: calculateAnnualNetBenefit(item),      payback: calculatePaybackPeriod(item),      priority: determinePriority(item)    }))    .filter((item) => item.payback !== null);}function findBestPaybackItem() {  const recoverable = getRecoverableTechnologies();  if (recoverable.length === 0) {    return null;  }  return recoverable.reduce((currentBest, item) =>    item.payback < currentBest.payback ? item : currentBest  );}function findHighestBenefitItem() {  return technologies.reduce((currentBest, item) =>    calculateAnnualNetBenefit(item) > calculateAnnualNetBenefit(currentBest)      ? item      : currentBest  );}function findRecommendedPilotItem() {  const candidates = getRecoverableTechnologies()    .filter((item) => item.deploymentRisk !== "High")    .sort((a, b) => {      if (a.priority === "High" && b.priority !== "High") return -1;      if (a.priority !== "High" && b.priority === "High") return 1;      return a.payback - b.payback;    });  if (candidates.length === 0) {    return null;  }  return candidates[0];}function findItemsRequiringValidation() {  return technologies.filter(    (item) =>      item.deploymentRisk === "High" ||      item.readiness === "Early stage" ||      calculatePaybackPeriod(item) === null  );}function renderTable() {  const tableBody = document.getElementById("resultsTable");  tableBody.innerHTML = "";  technologies.forEach((item) => {    const annualGrossBenefit = calculateAnnualGrossBenefit(item);    const annualNetBenefit = calculateAnnualNetBenefit(item);    const payback = calculatePaybackPeriod(item);    const priority = determinePriority(item);    const row = document.createElement("tr");    row.innerHTML = `      <td>${item.name}</td>      <td>${item.category}</td>      <td class="${getRiskClass(item.deploymentRisk)}">${item.deploymentRisk}</td>      <td class="${getReadinessClass(item.readiness)}">${item.readiness}</td>      <td>${formatEok(item.capex)}</td>      <td>${formatEok(annualGrossBenefit)}</td>      <td>${formatEok(item.annualOpex)}</td>      <td>${formatEok(annualNetBenefit)}</td>      <td>${formatPayback(payback)}</td>      <td class="${getPriorityClass(priority)}">${priority}</td>    `;    tableBody.appendChild(row);  });}function renderSummaryCards() {  const totalCount = document.getElementById("totalCount");  const bestPayback = document.getElementById("bestPayback");  const highestBenefit = document.getElementById("highestBenefit");  totalCount.textContent = technologies.length;  const bestPaybackItem = findBestPaybackItem();  if (bestPaybackItem === null) {    bestPayback.textContent = "-";  } else {    bestPayback.textContent = `${bestPaybackItem.name} (${bestPaybackItem.payback.toFixed(1)} years)`;  }  const highestBenefitItem = findHighestBenefitItem();  highestBenefit.textContent = `${highestBenefitItem.name} (${formatEok(    calculateAnnualNetBenefit(highestBenefitItem)  )})`;}function renderManagementSummary() {  const summaryList = document.getElementById("managementSummary");  const bestPaybackItem = findBestPaybackItem();  const highestBenefitItem = findHighestBenefitItem();  const recommendedPilotItem = findRecommendedPilotItem();  const validationItems = findItemsRequiringValidation();  const bestPaybackText = bestPaybackItem    ? `${bestPaybackItem.name} has the shortest payback period at ${bestPaybackItem.payback.toFixed(1)} years.`    : "No technology has a recoverable payback period based on the current assumptions.";  const highestBenefitText = `${highestBenefitItem.name} has the highest annual net benefit at ${formatEok(    calculateAnnualNetBenefit(highestBenefitItem)  )}.`;  const recommendedText = recommendedPilotItem    ? `${recommendedPilotItem.name} is recommended as the first pilot candidate because it has a reasonable payback period and does not have high deployment risk.`    : "No item is currently recommended as a first pilot candidate. Assumptions or risk conditions should be reviewed.";  const validationText =    validationItems.length > 0      ? `${validationItems.map((item) => item.name).join(", ")} require further technical validation before management decision.`      : "No item requires additional technical validation based on the current risk and readiness settings.";  summaryList.innerHTML = `    <li>${bestPaybackText}</li>    <li>${highestBenefitText}</li>    <li>${recommendedText}</li>    <li>${validationText}</li>  `;}function renderApp() {  renderTable();  renderSummaryCards();  renderManagementSummary();}function getNumberInputValue(id) {  const value = Number(document.getElementById(id).value);  if (Number.isNaN(value) || value < 0) {    return 0;  }  return value;}function escapeCsvValue(value) {  const stringValue = String(value);  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("
-")) {    return `"${stringValue.replaceAll('"', '""')}"`;  }  return stringValue;}function exportToCsv() {  const headers = [    "Technology",    "Category",    "Deployment Risk",    "Technology Readiness",    "CAPEX",    "Annual Gross Benefit",    "Annual OPEX",    "Annual Net Benefit",    "Payback Period",    "Priority"  ];  const rows = technologies.map((item) => {    const payback = calculatePaybackPeriod(item);    return [      item.name,      item.category,      item.deploymentRisk,      item.readiness,      item.capex,      calculateAnnualGrossBenefit(item),      item.annualOpex,      calculateAnnualNetBenefit(item),      payback === null ? "Not recoverable" : payback.toFixed(1),      determinePriority(item)    ];  });  const csvContent = [headers, ...rows]    .map((row) => row.map(escapeCsvValue).join(","))    .join("
-");  const blob = new Blob(["" + csvContent], {    type: "text/csv;charset=utf-8;"  });  const url = URL.createObjectURL(blob);  const link = document.createElement("a");  link.href = url;  link.download = "epc-automation-roi-comparison.csv";  link.click();  URL.revokeObjectURL(url);}document.getElementById("technologyForm").addEventListener("submit", (event) => {  event.preventDefault();  const newTechnology = {    name: document.getElementById("technologyName").value.trim(),    category: document.getElementById("category").value,    deploymentRisk: document.getElementById("deploymentRisk").value,    readiness: document.getElementById("readiness").value,    capex: getNumberInputValue("capex"),    annualOpex: getNumberInputValue("annualOpex"),    laborSaving: getNumberInputValue("laborSaving"),    scheduleBenefit: getNumberInputValue("scheduleBenefit"),    reworkReduction: getNumberInputValue("reworkReduction"),    otherBenefit: getNumberInputValue("otherBenefit")  };  technologies.push(newTechnology);  event.target.reset();  renderApp();});document.getElementById("exportCsv").addEventListener("click", exportToCsv);renderApp();
+const technologies = [
+  {
+    name: "Welding Robot",
+    category: "Welding",
+    deploymentRisk: "Medium",
+    readiness: "Pilot required",
+    capex: 260000000,
+    annualOpex: 35000000,
+    laborSaving: 90000000,
+    scheduleBenefit: 45000000,
+    reworkReduction: 20000000,
+    otherBenefit: 10000000
+  },
+  {
+    name: "Rebar Cage Automation",
+    category: "Civil",
+    deploymentRisk: "Medium",
+    readiness: "Pilot required",
+    capex: 320000000,
+    annualOpex: 42000000,
+    laborSaving: 120000000,
+    scheduleBenefit: 60000000,
+    reworkReduction: 25000000,
+    otherBenefit: 15000000
+  },
+  {
+    name: "3D Concrete Printing",
+    category: "Civil",
+    deploymentRisk: "High",
+    readiness: "Early stage",
+    capex: 450000000,
+    annualOpex: 60000000,
+    laborSaving: 140000000,
+    scheduleBenefit: 90000000,
+    reworkReduction: 30000000,
+    otherBenefit: 20000000
+  },
+  {
+    name: "AGV / Mobile Transporter",
+    category: "Logistics",
+    deploymentRisk: "Low",
+    readiness: "Proven",
+    capex: 180000000,
+    annualOpex: 28000000,
+    laborSaving: 70000000,
+    scheduleBenefit: 30000000,
+    reworkReduction: 10000000,
+    otherBenefit: 15000000
+  },
+  {
+    name: "Tank Coating Robot",
+    category: "Painting",
+    deploymentRisk: "Medium",
+    readiness: "Pilot required",
+    capex: 220000000,
+    annualOpex: 30000000,
+    laborSaving: 85000000,
+    scheduleBenefit: 35000000,
+    reworkReduction: 18000000,
+    otherBenefit: 12000000
+  }
+];
+
+function calculateAnnualGrossBenefit(item) {
+  return item.laborSaving + item.scheduleBenefit + item.reworkReduction + item.otherBenefit;
+}
+
+function calculateAnnualNetBenefit(item) {
+  return calculateAnnualGrossBenefit(item) - item.annualOpex;
+}
+
+function calculatePaybackPeriod(item) {
+  const annualNetBenefit = calculateAnnualNetBenefit(item);
+
+  if (annualNetBenefit <= 0) {
+    return null;
+  }
+
+  return item.capex / annualNetBenefit;
+}
+
+function determinePriority(item) {
+  const payback = calculatePaybackPeriod(item);
+  const annualNetBenefit = calculateAnnualNetBenefit(item);
+
+  if (payback === null) {
+    return "Low";
+  }
+
+  if (
+    payback <= 3 &&
+    annualNetBenefit >= 100000000 &&
+    item.deploymentRisk !== "High" &&
+    item.readiness !== "Early stage"
+  ) {
+    return "High";
+  }
+
+  if (payback <= 5 && item.deploymentRisk !== "High") {
+    return "Medium";
+  }
+
+  return "Low";
+}
+
+function formatEok(value) {
+  return `${(value / 100000000).toFixed(1)} 억원`;
+}
+
+function formatPayback(value) {
+  if (value === null) {
+    return "Not recoverable";
+  }
+
+  return `${value.toFixed(1)} years`;
+}
+
+function getPriorityClass(priority) {
+  if (priority === "High") return "priority-high";
+  if (priority === "Medium") return "priority-medium";
+  return "priority-low";
+}
+
+function getRiskClass(risk) {
+  if (risk === "Low") return "risk-low";
+  if (risk === "Medium") return "risk-medium";
+  return "risk-high";
+}
+
+function getReadinessClass(readiness) {
+  if (readiness === "Proven") return "readiness-proven";
+  if (readiness === "Pilot required") return "readiness-pilot";
+  return "readiness-early";
+}
+
+function renderTable() {
+  const tableBody = document.getElementById("resultsTable");
+
+  if (!tableBody) {
+    return;
+  }
+
+  tableBody.innerHTML = "";
+
+  technologies.forEach((item) => {
+    const annualGrossBenefit = calculateAnnualGrossBenefit(item);
+    const annualNetBenefit = calculateAnnualNetBenefit(item);
+    const payback = calculatePaybackPeriod(item);
+    const priority = determinePriority(item);
+
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${item.name}</td>
+      <td>${item.category}</td>
+      <td class="${getRiskClass(item.deploymentRisk)}">${item.deploymentRisk}</td>
+      <td class="${getReadinessClass(item.readiness)}">${item.readiness}</td>
+      <td>${formatEok(item.capex)}</td>
+      <td>${formatEok(annualGrossBenefit)}</td>
+      <td>${formatEok(item.annualOpex)}</td>
+      <td>${formatEok(annualNetBenefit)}</td>
+      <td>${formatPayback(payback)}</td>
+      <td class="${getPriorityClass(priority)}">${priority}</td>
+    `;
+
+    tableBody.appendChild(row);
+  });
+}
+
+function findBestPaybackItem() {
+  const recoverableItems = technologies
+    .map((item) => ({
+      ...item,
+      payback: calculatePaybackPeriod(item)
+    }))
+    .filter((item) => item.payback !== null);
+
+  if (recoverableItems.length === 0) {
+    return null;
+  }
+
+  return recoverableItems.reduce((best, item) =>
+    item.payback < best.payback ? item : best
+  );
+}
+
+function findHighestBenefitItem() {
+  return technologies.reduce((best, item) =>
+    calculateAnnualNetBenefit(item) > calculateAnnualNetBenefit(best) ? item : best
+  );
+}
+
+function renderSummaryCards() {
+  const totalCount = document.getElementById("totalCount");
+  const bestPayback = document.getElementById("bestPayback");
+  const highestBenefit = document.getElementById("highestBenefit");
+
+  if (totalCount) {
+    totalCount.textContent = technologies.length;
+  }
+
+  const bestPaybackItem = findBestPaybackItem();
+
+  if (bestPayback) {
+    bestPayback.textContent = bestPaybackItem
+      ? `${bestPaybackItem.name} (${bestPaybackItem.payback.toFixed(1)} years)`
+      : "-";
+  }
+
+  const highestBenefitItem = findHighestBenefitItem();
+
+  if (highestBenefit) {
+    highestBenefit.textContent = `${highestBenefitItem.name} (${formatEok(
+      calculateAnnualNetBenefit(highestBenefitItem)
+    )})`;
+  }
+}
+
+function renderManagementSummary() {
+  const summaryList = document.getElementById("managementSummary");
+
+  if (!summaryList) {
+    return;
+  }
+
+  const bestPaybackItem = findBestPaybackItem();
+  const highestBenefitItem = findHighestBenefitItem();
+
+  const validationItems = technologies.filter(
+    (item) => item.deploymentRisk === "High" || item.readiness === "Early stage"
+  );
+
+  summaryList.innerHTML = `
+    <li>${
+      bestPaybackItem
+        ? `${bestPaybackItem.name} has the shortest payback period at ${bestPaybackItem.payback.toFixed(1)} years.`
+        : "No technology has a recoverable payback period."
+    }</li>
+    <li>${highestBenefitItem.name} has the highest annual net benefit at ${formatEok(
+      calculateAnnualNetBenefit(highestBenefitItem)
+    )}.</li>
+    <li>AGV / Mobile Transporter is currently the most practical first pilot candidate based on risk and readiness.</li>
+    <li>${
+      validationItems.length > 0
+        ? `${validationItems.map((item) => item.name).join(", ")} require further technical validation.`
+        : "No item requires additional technical validation."
+    }</li>
+  `;
+}
+
+function getNumberInputValue(id) {
+  const input = document.getElementById(id);
+
+  if (!input) {
+    return 0;
+  }
+
+  const value = Number(input.value);
+
+  if (Number.isNaN(value) || value < 0) {
+    return 0;
+  }
+
+  return value;
+}
+
+function renderApp() {
+  renderTable();
+  renderSummaryCards();
+  renderManagementSummary();
+}
+
+const technologyForm = document.getElementById("technologyForm");
+
+if (technologyForm) {
+  technologyForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const newTechnology = {
+      name: document.getElementById("technologyName").value.trim(),
+      category: document.getElementById("category").value,
+      deploymentRisk: document.getElementById("deploymentRisk")
+        ? document.getElementById("deploymentRisk").value
+        : "Medium",
+      readiness: document.getElementById("readiness")
+        ? document.getElementById("readiness").value
+        : "Pilot required",
+      capex: getNumberInputValue("capex"),
+      annualOpex: getNumberInputValue("annualOpex"),
+      laborSaving: getNumberInputValue("laborSaving"),
+      scheduleBenefit: getNumberInputValue("scheduleBenefit"),
+      reworkReduction: getNumberInputValue("reworkReduction"),
+      otherBenefit: getNumberInputValue("otherBenefit")
+    };
+
+    if (newTechnology.name.length === 0) {
+      return;
+    }
+
+    technologies.push(newTechnology);
+    event.target.reset();
+    renderApp();
+  });
+}
+
+renderApp();
