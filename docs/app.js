@@ -190,6 +190,23 @@ function findHighestBenefitItem() {
   );
 }
 
+function findRecommendedPilotItem() {
+  const candidates = technologies
+    .map((item) => ({
+      ...item,
+      payback: calculatePaybackPeriod(item),
+      priority: determinePriority(item)
+    }))
+    .filter((item) => item.payback !== null && item.deploymentRisk !== "High")
+    .sort((a, b) => {
+      if (a.priority === "High" && b.priority !== "High") return -1;
+      if (a.priority !== "High" && b.priority === "High") return 1;
+      return a.payback - b.payback;
+    });
+
+  return candidates.length > 0 ? candidates[0] : null;
+}
+
 function renderSummaryCards() {
   const totalCount = document.getElementById("totalCount");
   const bestPayback = document.getElementById("bestPayback");
@@ -225,7 +242,7 @@ function renderManagementSummary() {
 
   const bestPaybackItem = findBestPaybackItem();
   const highestBenefitItem = findHighestBenefitItem();
-
+  const recommendedPilotItem = findRecommendedPilotItem();
   const validationItems = technologies.filter(
     (item) => item.deploymentRisk === "High" || item.readiness === "Early stage"
   );
@@ -239,7 +256,11 @@ function renderManagementSummary() {
     <li>${highestBenefitItem.name} has the highest annual net benefit at ${formatEok(
       calculateAnnualNetBenefit(highestBenefitItem)
     )}.</li>
-    <li>AGV / Mobile Transporter is currently the most practical first pilot candidate based on risk and readiness.</li>
+    <li>${
+      recommendedPilotItem
+        ? `${recommendedPilotItem.name} is recommended as the first pilot candidate because it has reasonable payback and manageable deployment risk.`
+        : "No item is currently recommended as a first pilot candidate."
+    }</li>
     <li>${
       validationItems.length > 0
         ? `${validationItems.map((item) => item.name).join(", ")} require further technical validation.`
@@ -264,6 +285,66 @@ function getNumberInputValue(id) {
   return value;
 }
 
+function escapeCsvValue(value) {
+  const stringValue = String(value);
+
+  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+    return `"${stringValue.replaceAll('"', '""')}"`;
+  }
+
+  return stringValue;
+}
+
+function exportToCsv() {
+  const headers = [
+    "Technology",
+    "Category",
+    "Deployment Risk",
+    "Technology Readiness",
+    "CAPEX",
+    "Annual Gross Benefit",
+    "Annual OPEX",
+    "Annual Net Benefit",
+    "Payback Period",
+    "Priority"
+  ];
+
+  const rows = technologies.map((item) => {
+    const payback = calculatePaybackPeriod(item);
+
+    return [
+      item.name,
+      item.category,
+      item.deploymentRisk,
+      item.readiness,
+      item.capex,
+      calculateAnnualGrossBenefit(item),
+      item.annualOpex,
+      calculateAnnualNetBenefit(item),
+      payback === null ? "Not recoverable" : payback.toFixed(1),
+      determinePriority(item)
+    ];
+  });
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\n");
+
+  const blob = new Blob(["\uFEFF" + csvContent], {
+    type: "text/csv;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "epc-automation-roi-comparison.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function renderApp() {
   renderTable();
   renderSummaryCards();
@@ -279,12 +360,8 @@ if (technologyForm) {
     const newTechnology = {
       name: document.getElementById("technologyName").value.trim(),
       category: document.getElementById("category").value,
-      deploymentRisk: document.getElementById("deploymentRisk")
-        ? document.getElementById("deploymentRisk").value
-        : "Medium",
-      readiness: document.getElementById("readiness")
-        ? document.getElementById("readiness").value
-        : "Pilot required",
+      deploymentRisk: document.getElementById("deploymentRisk").value,
+      readiness: document.getElementById("readiness").value,
       capex: getNumberInputValue("capex"),
       annualOpex: getNumberInputValue("annualOpex"),
       laborSaving: getNumberInputValue("laborSaving"),
@@ -301,6 +378,12 @@ if (technologyForm) {
     event.target.reset();
     renderApp();
   });
+}
+
+const exportCsvButton = document.getElementById("exportCsv");
+
+if (exportCsvButton) {
+  exportCsvButton.addEventListener("click", exportToCsv);
 }
 
 renderApp();
